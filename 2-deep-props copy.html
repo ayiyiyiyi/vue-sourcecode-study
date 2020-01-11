@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Document</title>
+</head>
+<body>
+    <div id="root">
+       
+        <p>{{obj.name.firstName}}</p>
+        <p>{{obj.name.lastName}}</p>
+    </div>
+</body>
+<script>
+
+    /**
+     *  简单实现访问多层级对象
+     */
+    //  function getValueByPath(obj, path) {
+    //     let paths = path.split('.');
+    //     let result = obj;
+    //     // for (let i = 0; i < paths.length; i++) {
+    //     //     const e = paths[i];
+    //     //     result = result[e];
+    //     // }
+    //     let prop;
+    //     while (prop = paths.shift()) {
+    //         result = result[prop];
+    //     }
+    //     return result;
+    // }
+
+    /**
+     * 函数柯里化实现访问多层级对象，
+     * 该函数在Vue编译模板前就生成了，之后若模板不变，则模板中path不变,则只需要传入变化的data，减少了函数的调用,节省了一些性能
+    */
+    function createGetValueByPath(path) {
+        let paths = path.split('.');
+        return function getValueByPath(obj) {
+            let result = obj;
+            let prop;
+            while (prop = paths.shift()) {
+                result = result[prop];
+            }
+            return result;
+        }
+    }
+
+    /** 简化实现Vue
+    * 通过递归将模板中的元素替换
+    * 这里tmpNode是DOM元素， 但在真正的Vue中，是 DOM --> 字符串模板 --> Vnode --> 真正的DOM元素 的过程
+    */
+    function compiler(tmpNode, data) {
+        let r = /\{\{(.+?)\}\}/g;
+        let childNodes = tmpNode.childNodes;
+        for (let i = 0; i < childNodes.length; i++) {
+            let type = childNodes[i].nodeType;
+            if (type === 3) { // 节点类型为3判断为文本节点                                                                                                                                                                              
+                let txt = childNodes[i].nodeValue;
+                txt = txt.replace(r, function (_, content) {
+                    let path = content.trim();
+                    let getValueByPath = createGetValueByPath(path);
+                    return getValueByPath(data);
+                });
+                childNodes[i].nodeValue = txt;
+            } else if (type === 1) { // 节点类型为1判断为DOM节点    
+                compiler(childNodes[i], data);
+            }
+        }
+    }
+    function Nvue(params) {
+        // $代表只读数据，_代表内部数据 --Vue源码中的习惯
+        this._data = params.data;
+        this._el = params.el;
+
+        // 准备过程：获取模板
+        this._templateDom = document.querySelector(this._el);
+        this._parentDom = document.querySelector(this._el).parentNode; 
+        // 渲染过程
+        this.render();
+    }
+    // 渲染模板
+    Nvue.prototype.render = function () {
+        this.compiler();
+    }
+    //  将模板与数据结合，得到真正的DOM元素
+    Nvue.prototype.compiler = function () {
+        let generateNode = this._templateDom.cloneNode(true);
+        compiler(generateNode, this._data);
+        this.update(generateNode);
+    }
+    // 将新的DOM元素插入到页面当中
+    Nvue.prototype.update = function (tmpNode) {
+        this._parentDom.replaceChild(tmpNode,document.querySelector(this._el));
+    }
+    let app = new Nvue({
+        el: '#root',
+        data: {
+            obj: {
+                name: {
+                    firstName: 'hello',
+                    lastName: 'world'
+                }
+            },
+            
+        }
+    });
+
+  
+</script>
+</html>

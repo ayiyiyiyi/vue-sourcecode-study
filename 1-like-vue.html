@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Document</title>
+</head>
+<body>
+    <div id="root">
+        <div>
+            <p>{{name}}-{{message}}</p>
+        </div>
+        <p>{{name}}</p>
+        <p>{{message}}</p>
+    </div>
+</body>
+<script>
+    // 简化实现Vue
+    //  通过递归将模板中的元素替换
+    // 这里tmpNode是DOM元素， 但在真正的Vue中，是 DOM --> 字符串模板 --> Vnode --> 真正的DOM元素 的过程
+    function compiler(tmpNode, data) {
+        let r = /\{\{(.+?)\}\}/g;
+        let childNodes = tmpNode.childNodes;
+        for (let i = 0; i < childNodes.length; i++) {
+            let type = childNodes[i].nodeType;
+            if (type === 3) { // 节点类型为3判断为文本节点                                                                                                                                                                              
+                let txt = childNodes[i].nodeValue;
+                txt = txt.replace(r, function (_, g) {
+                    let value = g.trim();
+                    return data[value];
+                });
+                childNodes[i].nodeValue = txt;
+            } else if (type === 1) { // 节点类型为1判断为DOM节点    
+                compiler(childNodes[i], data);
+            }
+        }
+    }
+    function Nvue(params) {
+        // $代表只读数据，_代表内部数据 --Vue源码中的习惯
+        this._data = params.data;
+        this._el = params.el;
+
+        // 准备过程：获取模板
+        this._templateDom = document.querySelector(this._el);
+        this._parentDom = document.querySelector(this._el).parentNode; 
+        // 渲染过程
+        this.render();
+    }
+    // 渲染模板
+    Nvue.prototype.render = function () {
+        this.compiler();
+    }
+    //  将模板与数据结合，得到真正的DOM元素
+    Nvue.prototype.compiler = function () {
+        let generateNode = this._templateDom.cloneNode(true);
+        compiler(generateNode, this._data);
+        this.update(generateNode);
+    }
+    // 将新的DOM元素插入到页面当中
+    Nvue.prototype.update = function (tmpNode) {
+        this._parentDom.replaceChild(tmpNode,document.querySelector(this._el));
+    }
+    let app = new Nvue({
+        el: '#root',
+        data: {
+            name: 'vue',
+            message: 'hello world'
+        }
+    });
+  
+</script>
+</html>
