@@ -4,7 +4,7 @@ method.forEach(item => {
     newPrototype[item] = function () {
         console.log(`intercept ${item} methods`);
         let res = Array.prototype[item].apply(this, arguments);
-        return this;
+        return res;
     }
 });
 let arr = [];
