@@ -71,3 +71,102 @@ Object.defineProperty( 对象, '设置属性名', {
     get() {}, 取值时触发
 })
 ```
+```js
+
+ var o = {
+      name: 'jim',
+      age: 19,
+      gender: '男'
+    } ;
+
+
+// 简化后的版本
+function defineReactive( target, key, value, enumerable ) {
+    // 函数内部就是一个局部作用域, 这个 value 就只在函数内使用的变量 ( 闭包 )
+    Object.defineProperty( target, key, {
+      configurable: true,
+      enumerable: !!enumerable,
+
+      get () {
+        console.log( `读取 o 的 ${key} 属性` ); // 额外
+        return value;
+      },
+      set ( newVal ) {
+        console.log( `设置 o 的 ${key} 属性为: ${newVal}` ); // 额外
+        value = newVal;
+      }
+    } )
+}
+
+// 将对象转换为响应式的
+let keys = Object.keys( o );
+for ( let i = 0; i < keys.length; i++ ) {
+    defineReactive( o, keys[ i ], o[ keys[ i ] ], true );
+}
+
+```
+
+对数组中对对象进行响应式处理
+
+- push
+- pop
+- shift
+- unshift
+- reverse
+- sort
+- splice
+
+
+1. 在改变数组的数据的时候, 要发出通知
+   - Vue 2 中的缺陷, 数组发生变化, 设置 length 没法通知 ( Vue 3 中使用 Proxy 语法 ES6 的语法解决了这个问题 )
+2. 加入的元素应该变成响应式的
+
+技巧: 如果一个函数已经定义了, 但是我们需要扩展其功能, 我们一般的处理办法:
+
+1. 使用一个临时的函数名存储函数
+2. 重新定义原来的函数
+3. 定义扩展的功能
+4. 调用临时的那个函数
+
+- 修改要进行响应式化的数组的原型 ( __proto__ )
+
+已经将对象改成响应式的了. 但是如果直接给对象赋值, 赋值另一个对象, 那么就不是响应式的了, 怎么办? ( 作业 )
+
+```
+// 继承关系: arr -> Array.prototype -> Object.prototype -> ...
+// 继承关系: arr -> 改写的方法 -> Array.prototype -> Object.prototype -> ...
+```
+## proxy
+
+代理方法, 就是将 app._data 中的成员 映射到 app 上 
+
+由于需要在更新数据的时候, 更新页面的内容
+所以 app._data 访问的成员 与 app 访问的成员应该时同一个成员
+
+由于 app._data 已经是响应式的对象了, 所以只需要让 app 访问的成员去访问 app._data 的对应成员就可以了.
+
+```js
+app._data.name
+// vue 设计, 不希望访问 _ 开头的数据
+// vue 中命名规则:
+//  - _ 开头的数据是私有数据
+//  - $ 开头的是只读数据
+app.name
+// 将 对 _data.xxx 的访问 交给了 实例
+
+// 重点: 访问 app 的 xxx 就是在访问 app._data.xxx
+```
+
+
+# 发布订阅模式
+
+目标: 解耦, 让各个模块之间没有紧密的联系
+
+现在的处理办法是 属性在更新的 时候 调用 mountComponent 方法. 
+
+在 Vue 中, 整个的更新是按照组件为单位进行 **判断**, 已节点为单位进行更新.
+
+- 如果代码中没有自定义组件, 那么在比较算法的时候, 我们会将全部的模板 对应的 虚拟 DOM 进行比较.
+- 如果代码中含有自定义组件, 那么在比较算法的时候, 就会判断更新的是哪一些组件中的属性, 只会判断更新数据的组件, 其他组件不会更新.
+
+**目标, 如果修改了什么属性, 就尽可能只更新这些属性对应的页面 DOM**

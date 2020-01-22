@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Document</title>
+</head>
+<body>
+    <div id="root">
+        <p>{{name}}</p>
+        <p>{{age}}</p>
+        <p>{{gender}}</p>
+    </div>
+</body>
+<script>
+    class Vnode {
+        constructor(tag, value, data, type) {
+            this.tag = tag && tag.toLowerCase();
+            this.value = value;
+            this.data = data;
+            this.type = type;
+            this.children = [];
+        }
+        appendChild(vnode) {
+            this.children.push(vnode);
+        }
+    }
+    // html Dom => vNode
+    function createVnode(node) {
+        let vNode = null;
+        let nodeType = node.nodeType;
+
+        if (nodeType === 1) {
+            let tag = node.nodeName;
+            let value = undefined;
+            let data = {};
+            let attrs = node.attributes;
+            for (let i = 0; i < attrs.length; i++) { 
+                // attrs[i]属性节点，type为2
+                data[attrs[i].nodeName] = attrs[i].nodeValue;
+            }
+            vNode = new Vnode(tag, value, data, nodeType);
+            if (node.childNodes.length > 0) {
+                for (let i = 0; i < node.childNodes.length; i++) {
+                    const child = node.childNodes[i];
+                    let childVnode = createVnode(child);
+                    vNode.appendChild(childVnode);
+                }
+            }
+        } else if (nodeType === 3) {
+            vNode = new Vnode(undefined, node.nodeValue, undefined, nodeType);
+        }
+        return vNode
+    }
+    
+    // Vnode => Vnode + data
+    let r = /\{\{(.+?)\}\}/g;
+    function createGetValueByPath(path) {
+        path = path.replace(r, function (_, g) {
+            return g.trim();
+        });
+        
+        let paths = path.split('.');
+        return function (obj) {
+            let result = obj;
+            let prop;
+            while (prop = paths.shift()) {
+                result = result[prop];
+            }
+
+            return result;
+        }
+    }
+    function combineData(vnode, data) {
+        let _type = vnode.type;
+
+        let _attrData = vnode.data;
+        let _value = vnode.value;
+        let _tag = vnode.tag;
+        let _newVnode;
+        if (_type === 3) {
+            let _newVal = _value;
+            if (_value.trim()) {
+                let getvalueFn = createGetValueByPath(_value);
+                _newVal= getvalueFn(data);
+            }
+            
+            _newVnode = new Vnode(_tag, _newVal, _attrData, _type);
+        } else if (_type === 1) {
+            _newVnode = new Vnode(_tag, _value, _attrData, _type);
+            if (vnode.children.length > 0) {
+                vnode.children.forEach(child => {
+                    let childNode = combineData(child, data);
+                    _newVnode.appendChild(childNode);
+                });
+            }
+        }
+        return _newVnode;
+    }
+    // Vnode => Html Dom
+    function parseVnode(vnode) {
+        let type = vnode.type;
+        let _node = null;
+        if (type === 1) {
+            _node = document.createElement(vnode.tag);
+            Object.keys(vnode.data).forEach((key) => {
+                _node.setAttribute(key, vnode.data[key]);
+            });
+            if (vnode.children.length > 0) {
+                vnode.children.forEach(child => {
+                    _node.appendChild(parseVnode(child));
+                });
+            }
+        } else if (type === 3) {
+            _node = document.createTextNode(vnode.value);
+        }
+        return _node;
+    }
+    // 响应式化的部分
+      let ARRAY_METHOD = [
+      'push',
+      'pop',
+      'shift',
+      'unshift',
+      'reverse',
+      'sort',
+      'splice',
+    ];
+    let array_methods = Object.create( Array.prototype );
+    ARRAY_METHOD.forEach( method => {
+      array_methods[ method ] = function () {
+        // 调用原来的方法
+        console.log( '调用的是拦截的 ' + method + ' 方法' );
+
+        // 将数据进行响应式化
+        for( let i = 0; i < arguments.length; i++ ) {
+          reactify( arguments[ i ] );
+        } 
+
+        let res = Array.prototype[ method ].apply( this, arguments );
+        // Array.prototype[ method ].call( this, ...arguments ); // 类比
+        return res;
+      }
+    } );
+
+    function reactify(obj, vm) {
+        let keys = Object.keys(obj); //只有对象keys才不为空数组，所以判断了obj是对象时才进行之后操作
+        keys.forEach(key => {
+            let value = obj[key];
+            if (Array.isArray(value)) {
+                value.forEach(item => {
+                    value.__proto__ = array_methods; // 数组就响应式了
+                    if (typeof item === 'object' && item !== null && !Array.isArray(item)) {
+                        reactify(item, vm);
+                    }
+                });
+            } else {
+                defineReactive.call(vm, obj, key, value, true);
+            }
+        });
+    }
+
+    function defineReactive(target, key, val, enumberable) {
+        let _  = this;
+        if (typeof val === 'object' && val !== null && !Array.isArray(val)) {
+            reactify(val);
+        }
+        
+        Object.defineProperty(target, key, {
+            configurable: true,
+            enumberable: !!enumberable,
+            set(newVal) {
+                console.log(`设置 ${key} 属性`);
+                if (typeof newVal === 'object' && newVal !== null && !Array.isArray(newVal)) {
+                    reactify(newVal);
+                }
+                val = newVal;
+                _.mountComponent();
+            },
+            get() {
+                console.log(`读取 ${key} 属性`);
+                return val;
+            }
+        })
+    }
+
+    function Nvue(options) {
+       this._data = options.data;
+       this._el = options.el;
+       this._template = document.querySelector(this._el);
+       this._parentDom = document.querySelector(this._el).parentNode; 
+        
+       reactify(this._data, this);
+       this.mount();
+    }
+    Nvue.prototype.mount = function () {
+        this.render = this.createRenderFn();
+
+        // 生成虚拟DOM
+        this.mountComponent();
+    }
+    Nvue.prototype.mountComponent = function () {
+        let mount = () => { //函数调用模式
+            this.update(this.render());
+        }
+        mount.call(this); //本质上应交给watcher来调用 ???
+    }
+
+    /**
+     * vue中使用的是二次提交，生成新的虚拟DOM与旧的DOM比较
+     */
+
+    // 生成render函数，目的是为了缓存抽象语法树，先暂时用虚拟DOM模拟
+    Nvue.prototype.createRenderFn = function () {
+        let ast = createVnode(this._template);
+        // render函数目的是生成已经将{{}}中内容替换为data内数值的虚拟DOM
+        return function () {
+            let tmp = combineData(ast, this._data);
+            return tmp;
+        }
+    }
+    // diff 算法在这里实现，先暂时用替换HTMLDOM元素来模拟
+    Nvue.prototype.update = function (tmp) {
+        let node = parseVnode(tmp);
+        this._parentDom.replaceChild(node, this._template);
+    }
+
+
+    let app = new Nvue({
+        el: '#root',
+        data: {
+            name: '橘子', 
+            age: 19, 
+            gender: '母', 
+            datas: [
+                { info: '数学' },
+                { info: '英语' },
+                { info: '语文' },
+                { info: '物理' },
+            ]
+        }
+    });
+
+</script>
+</html>
