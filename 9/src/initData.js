@@ -56,11 +56,10 @@ function observer(obj, vm) {
 }
 
 function defineReactive(target, key, val, enumberable) {
-    let _ = this;
     if (typeof val === 'object' && val !== null && !Array.isArray(val)) {
         observer(val);
     }
-
+    let dep = new Dep();
     Object.defineProperty(target, key, {
         configurable: true,
         enumberable: !!enumberable,
@@ -70,10 +69,13 @@ function defineReactive(target, key, val, enumberable) {
                 observer(newVal);
             }
             val = newVal;
-            _.mountComponent();
+            
+            // 派发更新
+            dep.notify();
         },
         get() {
             console.log(`读取 ${key} 属性`);
+            // 依赖收集（因只有一个主watcher，暂时省略
             return val;
         }
     })

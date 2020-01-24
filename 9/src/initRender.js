@@ -1,6 +1,5 @@
 Nvue.prototype.mount = function () {
     this.render = this.createRenderFn();
-
     // 生成虚拟DOM
     this.mountComponent();
 }
@@ -8,7 +7,8 @@ Nvue.prototype.mountComponent = function () {
     let mount = () => { //函数调用模式
         this.update(this.render());
     }
-    mount.call(this); //本质上应交给watcher来调用 ???
+     // 这个 Watcher 是全局的 Watcher, 目的是在任何一个位置都可以访问到
+    Dep.target = new Watcher(this, mount);
 }
 
 /**
